@@ -139,6 +139,13 @@ async function renderPageWithLayout(pageData: {
     const sorted = [...line].sort((a, b) => getItemX(a) - getItemX(b));
     let built = "";
     let previousEnd = -1;
+    const gaps: number[] = [];
+
+    for (let idx = 1; idx < sorted.length; idx += 1) {
+      const gap = getItemX(sorted[idx]) - (getItemX(sorted[idx - 1]) + sorted[idx - 1].width);
+      gaps.push(gap);
+    }
+    const tableLikeLine = gaps.filter((gap) => gap > 8).length >= 2;
 
     for (const item of sorted) {
       const value = item.str.trim();
@@ -148,7 +155,7 @@ async function renderPageWithLayout(pageData: {
 
       if (previousEnd >= 0) {
         const gap = getItemX(item) - previousEnd;
-        if (gap > 14) {
+        if (tableLikeLine && gap > 8) {
           built += "\t";
         } else if (gap > 5) {
           built += " ";
@@ -159,7 +166,7 @@ async function renderPageWithLayout(pageData: {
       previousEnd = getItemX(item) + item.width;
     }
 
-    return built.trim();
+    return built.trimEnd();
   });
 
   return renderedLines.filter(Boolean).join("\n");
@@ -257,22 +264,21 @@ function convertTableLikeBlocks(text: string): string {
 }
 
 function parseColumns(line: string): string[] | undefined {
-  const trimmed = line.trim();
-  if (!trimmed) {
+  const lineWithoutRightSpace = line.replace(/\s+$/g, "");
+  if (!lineWithoutRightSpace.trim()) {
     return undefined;
   }
 
-  // Our layout renderer inserts tabs for large horizontal gaps.
-  const columns = trimmed
-    .split(/\t+/)
-    .map((part) => part.trim())
-    .filter(Boolean);
+  // Keep empty columns to preserve wrapped-cell alignment.
+  const rawColumns = lineWithoutRightSpace.split("\t");
+  const columns = rawColumns.map((part) => part.trim());
+  const nonEmptyCount = columns.filter((part) => part.length > 0).length;
 
-  if (columns.length < 3) {
+  if (nonEmptyCount < 3) {
     return undefined;
   }
 
-  return columns;
+  return trimTrailingEmpty(columns);
 }
 
 function normalizeRow(row: string[], expectedColumns: number): string[] {
@@ -290,19 +296,35 @@ function normalizeRow(row: string[], expectedColumns: number): string[] {
 }
 
 function looksContinuationLine(line: string): boolean {
-  const trimmed = line.trim();
-  if (!trimmed) {
+  const lineWithoutRightSpace = line.replace(/\s+$/g, "");
+  if (!lineWithoutRightSpace.trim()) {
     return false;
   }
-  if (trimmed.startsWith("|")) {
+  if (lineWithoutRightSpace.trimStart().startsWith("|")) {
     return false;
   }
-  return trimmed.length > 0 && !/^[A-Z0-9][A-Z0-9-]*(\s*\t|$)/.test(trimmed);
+  // Continuation lines often start with tabs (wrapped cells in col2/col3).
+  if (lineWithoutRightSpace.startsWith("\t")) {
+    return true;
+  }
+  const trimmed = lineWithoutRightSpace.trim();
+  return !/^[A-Z0-9][A-Z0-9-]*(\s*\t|$)/.test(trimmed);
 }
 
 function mergeContinuationIntoRow(row: string[], continuation: string): void {
-  const targetIndex = findContinuationTargetIndex(row);
-  const merged = `${row[targetIndex]} ${continuation.trim()}`.trim();
+  const explicitColumns = trimTrailingEmpty(
+    continuation.replace(/\s+$/g, "").split("\t").map((part) => part.trim())
+  );
+
+  const targetIndex =
+    explicitColumns.length > 1
+      ? findFirstNonEmptyIndex(explicitColumns)
+      : findContinuationTargetIndex(row);
+  const mergedText =
+    explicitColumns.length > 1
+      ? explicitColumns.filter(Boolean).join(" ")
+      : continuation.trim();
+  const merged = `${row[targetIndex]} ${mergedText}`.trim();
   row[targetIndex] = merged;
 }
 
@@ -341,6 +363,23 @@ function isLikelyTable(rows: string[][]): boolean {
     /id|role|story|ref|date|name|status/i.test(cell)
   );
   return hasHeaderLikeRow || rows.length >= 3;
+}
+
+function findFirstNonEmptyIndex(values: string[]): number {
+  for (let i = 0; i < values.length; i += 1) {
+    if (values[i]) {
+      return i;
+    }
+  }
+  return 0;
+}
+
+function trimTrailingEmpty(values: string[]): string[] {
+  let end = values.length;
+  while (end > 0 && !values[end - 1]) {
+    end -= 1;
+  }
+  return values.slice(0, end);
 }
 
 function toMarkdownTable(rows: string[][]): string[] {

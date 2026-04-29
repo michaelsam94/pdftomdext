@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.6]
+- Improved wrapped-cell alignment by preserving tab-indented continuation columns during table reconstruction.
+- Version bump and repackaged release.
+
 ## [0.0.5]
 - Refined table reconstruction with tab-based column parsing and continuation-line merging for wrapped PDF cells.
 - Version bump and repackaged release.

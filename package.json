@@ -2,7 +2,7 @@
   "name": "pdftomdext",
   "displayName": "PdfToMd",
   "description": "Convert PDF files to Markdown from VS Code",
-  "version": "0.0.4",
+  "version": "0.0.5",
   "license": "MIT",
   "publisher": "michaelsam94",
   "icon": "icon.png",

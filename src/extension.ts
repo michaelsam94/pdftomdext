@@ -131,7 +131,7 @@ async function renderPageWithLayout(pageData: {
 }): Promise<string> {
   const textContent = await pageData.getTextContent({
     normalizeWhitespace: true,
-    disableCombineTextItems: false
+    disableCombineTextItems: true
   });
   const lines = groupItemsIntoLines(textContent.items);
 
@@ -148,7 +148,7 @@ async function renderPageWithLayout(pageData: {
 
       if (previousEnd >= 0) {
         const gap = getItemX(item) - previousEnd;
-        if (gap > 20) {
+        if (gap > 14) {
           built += "\t";
         } else if (gap > 5) {
           built += " ";
@@ -215,24 +215,35 @@ function convertTableLikeBlocks(text: string): string {
   let i = 0;
   while (i < lines.length) {
     const row = parseColumns(lines[i]);
-    if (!row || row.length < 2) {
+    if (!row || row.length < 3) {
       output.push(lines[i]);
       i += 1;
       continue;
     }
 
     const tableRows: string[][] = [row];
+    const expectedColumns = row.length;
     let j = i + 1;
     while (j < lines.length) {
       const next = parseColumns(lines[j]);
-      if (!next || next.length !== row.length) {
+      if (next) {
+        tableRows.push(normalizeRow(next, expectedColumns));
+        j += 1;
+        continue;
+      }
+
+      if (looksContinuationLine(lines[j]) && tableRows.length > 0) {
+        mergeContinuationIntoRow(tableRows[tableRows.length - 1], lines[j]);
+        j += 1;
+        continue;
+      }
+
+      if (!next) {
         break;
       }
-      tableRows.push(next);
-      j += 1;
     }
 
-    if (tableRows.length < 2) {
+    if (!isLikelyTable(tableRows)) {
       output.push(lines[i]);
       i += 1;
       continue;
@@ -251,17 +262,85 @@ function parseColumns(line: string): string[] | undefined {
     return undefined;
   }
 
-  // Most PDF extracted tables appear as aligned columns separated by 2+ spaces.
+  // Our layout renderer inserts tabs for large horizontal gaps.
   const columns = trimmed
-    .split(/\s{2,}|\t+/)
+    .split(/\t+/)
     .map((part) => part.trim())
     .filter(Boolean);
 
-  if (columns.length < 2) {
+  if (columns.length < 3) {
     return undefined;
   }
 
   return columns;
+}
+
+function normalizeRow(row: string[], expectedColumns: number): string[] {
+  if (row.length === expectedColumns) {
+    return row;
+  }
+
+  if (row.length < expectedColumns) {
+    return [...row, ...new Array(expectedColumns - row.length).fill("")];
+  }
+
+  const normalized = row.slice(0, expectedColumns - 1);
+  normalized.push(row.slice(expectedColumns - 1).join(" "));
+  return normalized;
+}
+
+function looksContinuationLine(line: string): boolean {
+  const trimmed = line.trim();
+  if (!trimmed) {
+    return false;
+  }
+  if (trimmed.startsWith("|")) {
+    return false;
+  }
+  return trimmed.length > 0 && !/^[A-Z0-9][A-Z0-9-]*(\s*\t|$)/.test(trimmed);
+}
+
+function mergeContinuationIntoRow(row: string[], continuation: string): void {
+  const targetIndex = findContinuationTargetIndex(row);
+  const merged = `${row[targetIndex]} ${continuation.trim()}`.trim();
+  row[targetIndex] = merged;
+}
+
+function findContinuationTargetIndex(row: string[]): number {
+  // Avoid appending to ID-like first column when possible.
+  let candidate = 1;
+  let maxLength = row[candidate]?.length ?? 0;
+
+  for (let i = 1; i < row.length; i += 1) {
+    const len = row[i].length;
+    if (len > maxLength) {
+      maxLength = len;
+      candidate = i;
+    }
+  }
+
+  return candidate;
+}
+
+function isLikelyTable(rows: string[][]): boolean {
+  if (rows.length < 2) {
+    return false;
+  }
+
+  const colCount = rows[0].length;
+  if (colCount < 3 || colCount > 8) {
+    return false;
+  }
+
+  const populatedRows = rows.filter((row) => row.some((cell) => cell.trim()));
+  if (populatedRows.length < 2) {
+    return false;
+  }
+
+  const hasHeaderLikeRow = rows[0].some((cell) =>
+    /id|role|story|ref|date|name|status/i.test(cell)
+  );
+  return hasHeaderLikeRow || rows.length >= 3;
 }
 
 function toMarkdownTable(rows: string[][]): string[] {

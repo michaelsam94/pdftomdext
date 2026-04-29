@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.5]
+- Refined table reconstruction with tab-based column parsing and continuation-line merging for wrapped PDF cells.
+- Version bump and repackaged release.
+
 ## [0.0.4]
 - Improved coordinate-based PDF text layout parsing for better table row/column detection.
 - Version bump and repackaged release.

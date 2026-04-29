@@ -1,0 +1,86 @@
+{
+  "name": "pdftomdext",
+  "displayName": "PdfToMd",
+  "description": "Convert PDF files to Markdown from VS Code",
+  "version": "0.0.1",
+  "license": "MIT",
+  "publisher": "michaelsam94",
+  "icon": "icon.png",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./out/extension.js",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/michaelsam94/pdftomdext.git"
+  },
+  "homepage": "https://github.com/michaelsam94/pdftomdext",
+  "bugs": {
+    "url": "https://github.com/michaelsam94/pdftomdext/issues"
+  },
+  "contributes": {
+    "commands": [
+      {
+        "command": "pdftomdext.convertPdfToMarkdown",
+        "title": "PDF to Markdown: Convert File"
+      }
+    ],
+    "menus": {
+      "explorer/context": [
+        {
+          "command": "pdftomdext.convertPdfToMarkdown",
+          "when": "resourceExtname == .pdf",
+          "group": "navigation"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "PDF to Markdown",
+      "properties": {
+        "pdftomdext.outputFolder": {
+          "type": "string",
+          "default": "",
+          "description": "Output folder for Markdown files. Leave empty to save next to the source PDF. Relative paths are resolved from the first workspace folder."
+        },
+        "pdftomdext.overwriteExisting": {
+          "type": "boolean",
+          "default": false,
+          "description": "Overwrite existing .md files with the same name."
+        },
+        "pdftomdext.openAfterConvert": {
+          "type": "boolean",
+          "default": true,
+          "description": "Open the generated Markdown file after conversion."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "lint": "eslint src --ext ts",
+    "pretest": "npm run compile && npm run lint",
+    "test": "@vscode/test-electron"
+  },
+  "dependencies": {
+    "pdf-parse": "^1.1.1"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.1",
+    "@types/node": "^20.14.2",
+    "@types/pdf-parse": "^1.1.5",
+    "@types/vscode": "^1.90.0",
+    "@typescript-eslint/eslint-plugin": "^8.0.0",
+    "@typescript-eslint/parser": "^8.0.0",
+    "@vscode/test-electron": "^2.4.1",
+    "eslint": "^9.5.0",
+    "typescript": "^5.5.2"
+  }
+}

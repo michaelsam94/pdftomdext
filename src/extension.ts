@@ -118,7 +118,8 @@ async function fileExists(filePath: string): Promise<boolean> {
 function toMarkdown(text: string, sourcePath: string): string {
   const title = path.parse(sourcePath).name;
   const normalized = normalizePdfText(text);
-  return `# ${title}\n\n${normalized}\n`;
+  const withTables = convertTableLikeBlocks(normalized);
+  return `# ${title}\n\n${withTables}\n`;
 }
 
 function normalizePdfText(text: string): string {
@@ -127,6 +128,83 @@ function normalizePdfText(text: string): string {
     .replace(/\u00a0/g, " ")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
+}
+
+function convertTableLikeBlocks(text: string): string {
+  const lines = text.split("\n");
+  const output: string[] = [];
+
+  let i = 0;
+  while (i < lines.length) {
+    const row = parseColumns(lines[i]);
+    if (!row || row.length < 2) {
+      output.push(lines[i]);
+      i += 1;
+      continue;
+    }
+
+    const tableRows: string[][] = [row];
+    let j = i + 1;
+    while (j < lines.length) {
+      const next = parseColumns(lines[j]);
+      if (!next || next.length !== row.length) {
+        break;
+      }
+      tableRows.push(next);
+      j += 1;
+    }
+
+    if (tableRows.length < 2) {
+      output.push(lines[i]);
+      i += 1;
+      continue;
+    }
+
+    output.push(...toMarkdownTable(tableRows));
+    i = j;
+  }
+
+  return output.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+}
+
+function parseColumns(line: string): string[] | undefined {
+  const trimmed = line.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+
+  // Most PDF extracted tables appear as aligned columns separated by 2+ spaces.
+  const columns = trimmed
+    .split(/\s{2,}|\t+/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+
+  if (columns.length < 2) {
+    return undefined;
+  }
+
+  return columns;
+}
+
+function toMarkdownTable(rows: string[][]): string[] {
+  const header = rows[0].map(escapeTableCell);
+  const separator = header.map(() => "---");
+  const body = rows.slice(1).map((row) => row.map(escapeTableCell));
+
+  const rendered = [
+    `| ${header.join(" | ")} |`,
+    `| ${separator.join(" | ")} |`
+  ];
+
+  for (const row of body) {
+    rendered.push(`| ${row.join(" | ")} |`);
+  }
+
+  return rendered;
+}
+
+function escapeTableCell(value: string): string {
+  return value.replace(/\|/g, "\\|");
 }
 
 export function deactivate() {}

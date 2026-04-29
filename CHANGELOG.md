@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.3]
+- Improved PDF table-like block conversion to Markdown table output.
+- Version bump and repackaged release.
+
 ## [0.0.2]
 - Confirmed extension branding name as `PdfToMd`.
 - Version bump and repackaged release.

@@ -41,7 +41,7 @@ export function activate(context: vscode.ExtensionContext) {
         }
 
         const pdfBuffer = await fs.readFile(sourcePath);
-        const extracted = await pdfParse(pdfBuffer);
+        const extracted = await extractPdfText(pdfBuffer);
         const markdown = toMarkdown(extracted.text, sourcePath);
         await fs.writeFile(outputPath, markdown, "utf8");
 
@@ -113,6 +113,84 @@ async function fileExists(filePath: string): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+async function extractPdfText(
+  pdfBuffer: Buffer
+): Promise<{ text: string; numpages: number }> {
+  return pdfParse(pdfBuffer, {
+    pagerender: renderPageWithLayout
+  }) as Promise<{ text: string; numpages: number }>;
+}
+
+async function renderPageWithLayout(pageData: {
+  getTextContent: (options: {
+    normalizeWhitespace: boolean;
+    disableCombineTextItems: boolean;
+  }) => Promise<{ items: PdfTextItem[] }>;
+}): Promise<string> {
+  const textContent = await pageData.getTextContent({
+    normalizeWhitespace: true,
+    disableCombineTextItems: false
+  });
+  const lines = groupItemsIntoLines(textContent.items);
+
+  const renderedLines = lines.map((line) => {
+    const sorted = [...line].sort((a, b) => getItemX(a) - getItemX(b));
+    let built = "";
+    let previousEnd = -1;
+
+    for (const item of sorted) {
+      const value = item.str.trim();
+      if (!value) {
+        continue;
+      }
+
+      if (previousEnd >= 0) {
+        const gap = getItemX(item) - previousEnd;
+        if (gap > 20) {
+          built += "\t";
+        } else if (gap > 5) {
+          built += " ";
+        }
+      }
+
+      built += value;
+      previousEnd = getItemX(item) + item.width;
+    }
+
+    return built.trim();
+  });
+
+  return renderedLines.filter(Boolean).join("\n");
+}
+
+function groupItemsIntoLines(items: PdfTextItem[]): PdfTextItem[][] {
+  const sortedByY = [...items].sort((a, b) => {
+    if (Math.abs(getItemY(a) - getItemY(b)) > 1.5) {
+      return getItemY(b) - getItemY(a);
+    }
+    return getItemX(a) - getItemX(b);
+  });
+
+  const lines: { y: number; items: PdfTextItem[] }[] = [];
+  for (const item of sortedByY) {
+    const value = item.str.trim();
+    if (!value) {
+      continue;
+    }
+
+    const itemY = getItemY(item);
+    const existing = lines.find((line) => Math.abs(line.y - itemY) <= 2);
+    if (existing) {
+      existing.items.push(item);
+      continue;
+    }
+
+    lines.push({ y: itemY, items: [item] });
+  }
+
+  return lines.map((line) => line.items);
 }
 
 function toMarkdown(text: string, sourcePath: string): string {
@@ -205,6 +283,20 @@ function toMarkdownTable(rows: string[][]): string[] {
 
 function escapeTableCell(value: string): string {
   return value.replace(/\|/g, "\\|");
+}
+
+type PdfTextItem = {
+  str: string;
+  width: number;
+  transform: [number, number, number, number, number, number];
+};
+
+function getItemX(item: PdfTextItem): number {
+  return item.transform[4] ?? 0;
+}
+
+function getItemY(item: PdfTextItem): number {
+  return item.transform[5] ?? 0;
 }
 
 export function deactivate() {}

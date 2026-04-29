@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.2]
+- Confirmed extension branding name as `PdfToMd`.
+- Version bump and repackaged release.
+
 ## [0.0.1]
 - Initial release of PdfToMd.
 - Added Explorer right-click conversion support for `.pdf` files.
